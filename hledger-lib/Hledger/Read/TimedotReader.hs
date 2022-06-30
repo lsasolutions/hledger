@@ -174,7 +174,7 @@ entryp = do
   lift skipNonNewlineSpaces
   hours <-
     try (lift followingcommentp >> return 0)
-    <|> (lift durationp <*
+    <|> (lift (try timerangep <|> durationp) <*
          (try (lift followingcommentp) <|> (newline >> return "")))
   mcs <- getDefaultCommodityAndStyle
   let 
@@ -195,6 +195,18 @@ entryp = do
   lift $ traceparse' "entryp"
   return t
 
+-- | Parse a range of times, e.g. "8.4-9.5", into the default unit. This range
+-- expression allows time tracking based on start and end times.
+timerangep :: TextParser m Quantity
+timerangep = do
+  traceparse "timerangep"
+  (t1, _, _, _) <- numberp Nothing
+  skipNonNewlineSpaces
+  string "-"
+  skipNonNewlineSpaces
+  (t2, _, _, _) <- numberp Nothing
+  applytimeunit $ t2 - t1
+
 durationp :: TextParser m Quantity
 durationp = do
   traceparse "durationp"
@@ -214,6 +226,11 @@ numericquantityp :: TextParser m Quantity
 numericquantityp = do
   -- lift $ traceparse "numericquantityp"
   (q, _, _, _) <- numberp Nothing
+  applytimeunit q
+
+-- | Apply the default time unit to a quantity.
+applytimeunit :: Quantity -> TextParser m Quantity
+applytimeunit q = do
   msymbol <- optional $ choice $ map (string . fst) timeUnits
   skipNonNewlineSpaces
   let q' =
